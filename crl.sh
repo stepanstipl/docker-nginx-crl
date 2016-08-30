@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash
 
 [[ "$DEBUG" == 'true' ]] && set -x
 
@@ -132,10 +132,13 @@ while true; do
     done
 
     # Regenerate the crl file if anything changed
-    [[ "${changed}" -eq "1" ]] && cat "${CRL_TMP}"/*.pem > "${CRL_TARGET}" && log "Updating target - ${CRL_TARGET}"
+    if [[ "${changed}" -eq "1" ]]; then
+      cat "${CRL_TMP}"/*.pem > "${CRL_TARGET}" && log "Updating target - ${CRL_TARGET}"
     
-    # Reload nginx if we have pid file
-    [[ -f "${CRL_NGINX_PID}" ]] && kill "-${CRL_SIGNAL}" $(cat "${CRL_NGINX_PID}") && log "Sending ${CRL_SIGNAL} to pid $(cat ${CRL_NGINX_PID})"
+      # Reload nginx if we have pid file
+      [[ -f "${CRL_NGINX_PID}" ]] && log "Sending ${CRL_SIGNAL} to pid $(cat ${CRL_NGINX_PID})" && kill "-${CRL_SIGNAL}" $(cat "${CRL_NGINX_PID}")
+    fi
 
-    log_d "Sleeping for ${CRL_INTERVAL}" && sleep "${CRL_INTERVAL}"
+    log_d "Sleeping for ${CRL_INTERVAL}"
+    sleep "${CRL_INTERVAL}"
 done
