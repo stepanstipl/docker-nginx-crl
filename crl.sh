@@ -1,5 +1,15 @@
 #!/bin/bash -e
 
+[[ "$DEBUG" == 'true' ]] && set -x
+
+log() {
+  echo "$(date -u +${CRL_DATE_FORMAT}) ${@}"
+}
+
+log_d() {
+  [[ "${DEBUG}" == 'true' ]] && log "${@}"
+}
+
 print_help() {
 cat <<EOF
 crl.sh
@@ -9,6 +19,7 @@ Usage:
   crl.sh -h
 
 Options:
+  -d            Date format passed to date command (default %Y-%m-%dT%H:%M:%SZ, end CRL_DATE_FORMAT)
   -h            Show this screen.
   -i            Interval to sleep in seconds (default 60, env CRL_INTERVAL)
   -k            Do not verify server ssl certs (curl -k, env CRL_VERIFY).
@@ -28,7 +39,8 @@ CRL_NGINX_PID=${CRL_NGINX_PID:-'/run/nginx.pid'}
 CRL_SOURCES=${CRL_SOURCES:-''}
 CRL_TARGET=${CRL_TARGET:-''}
 CRL_VERIFY=${CRL_VERIFY:-'true'}
-CRL_SIGNAL=${CRL-SIGNAL:-'HUP'}
+CRL_SIGNAL=${CRL_SIGNAL:-'HUP'}
+CRL_DATE_FORMAT=${CRL_DATE_FORMAT:-'%Y-%m-%dT%H:%M:%SZ'}
 
 /bin/mkdir -p ${CRL_TMP}
 trap "rm -f ${CRL_TMP}/*; exit 0" SIGINT SIGTERM
@@ -41,8 +53,11 @@ for src in ${CRL_SOURCES}; do
   sources=("${sources[@]}" "${src}") 
 done
 
-while getopts ':hi:kl:m:p:r:s:t:' opt; do
+while getopts ':d:hi:kl:m:p:r:s:t:' opt; do
     case "${opt}" in
+    d)
+        CRL_DATE_FORMAT="${OPTARG}"
+        ;;
     h)
         print_help
         exit 0
@@ -100,27 +115,27 @@ while true; do
 
         # Check given header
         header=''
-        header="$(curl -sI ${curl_insecure} ${sources[i]} | grep -i ${CRL_HEADER})" || echo "Failed to get CRL header ${CRL_HEADER} - ${sources[i]}"
+        header="$(curl -sI ${curl_insecure} ${sources[i]} | grep -i ${CRL_HEADER})" || log "Failed to get CRL header ${CRL_HEADER} - ${sources[i]}"
 
         # If it differs, download the file
         if [[ -n "${header}" && "${headers[i]}" != "${header}" ]]; then
-          echo "Downloading CRL - ${sources[i]}"
+          log "Downloading CRL - ${sources[i]}"
           curl -s ${curl_insecure} "${sources[i]}" -o "${CRL_TMP}/${i}.pem"
           if [[ $? -eq '0' ]]; then
             headers[i]="${header}"
             changed=1
           else
-            echo "Failed to download CRL - ${sources[i]}"
+            log "Failed to download CRL - ${sources[i]}"
           fi
         fi
 
     done
 
     # Regenerate the crl file if anything changed
-    [[ "${changed}" -eq "1" ]] && cat "${CRL_TMP}"/*.pem > "${CRL_TARGET}" && echo "Updating target - ${CRL_TARGET}"
+    [[ "${changed}" -eq "1" ]] && cat "${CRL_TMP}"/*.pem > "${CRL_TARGET}" && log "Updating target - ${CRL_TARGET}"
     
     # Reload nginx if we have pid file
-    [[ -f "${CRL_NGINX_PID}" ]] && kill "-${CRL_SIGNAL}" $(cat "${CRL_NGINX_PID}") && echo "Sending ${CRL_SIGNAL} to pid $(cat ${CRL_NGINX_PID})"
+    [[ -f "${CRL_NGINX_PID}" ]] && kill "-${CRL_SIGNAL}" $(cat "${CRL_NGINX_PID}") && log "Sending ${CRL_SIGNAL} to pid $(cat ${CRL_NGINX_PID})"
 
-    echo "Sleeping for ${CRL_INTERVAL}" && sleep "${CRL_INTERVAL}"
+    log_d "Sleeping for ${CRL_INTERVAL}" && sleep "${CRL_INTERVAL}"
 done
