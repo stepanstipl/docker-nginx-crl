@@ -19,13 +19,14 @@ Usage:
   crl.sh -h
 
 Options:
-  -d            Date format passed to date command (default %Y-%m-%dT%H:%M:%SZ, end CRL_DATE_FORMAT)
+  -d            Date format passed to date command (default '%Y-%m-%dT%H:%M:%SZ', end CRL_DATE_FORMAT)
   -h            Show this screen.
   -i            Interval to sleep in seconds (default 60, env CRL_INTERVAL)
   -k            Do not verify server ssl certs (curl -k, env CRL_VERIFY).
   -l            Header to check for modification (default Last-Modified, env CRL_HEADER).
   -m            Temp directory (default /tmp/crl.temp, env CRL_TMP).
   -p            Nginx PID location (default /run/nginx.pid, env CRL_NGINX_PID)
+  -q            Grep expression to use when searching for process, if PID location is not specififed (default 'nginx: master', env CRL_PGREP)
   -r            Signal to send to process on reload (default HUP, env CRL_SIGNAL) 
   -s            Source url (required, env CRL_SOURCES).
   -t            Target file (required, env CRL_TARGET).
@@ -41,9 +42,10 @@ CRL_TARGET=${CRL_TARGET:-''}
 CRL_VERIFY=${CRL_VERIFY:-'true'}
 CRL_SIGNAL=${CRL_SIGNAL:-'HUP'}
 CRL_DATE_FORMAT=${CRL_DATE_FORMAT:-'%Y-%m-%dT%H:%M:%SZ'}
+CRL_PGREP=${CRL_PGREP:-'nginx: master'}
 
 /bin/mkdir -p ${CRL_TMP}
-trap "rm -f ${CRL_TMP}/*; exit 0" SIGINT SIGTERM
+trap "rm -f ${CRL_TMP}/*; exit 0" SIGINT SIGTERM SIGKILL EXIT
 
 sources=()
 headers=()
@@ -136,7 +138,11 @@ while true; do
       cat "${CRL_TMP}"/*.pem > "${CRL_TARGET}" && log "Updating target - ${CRL_TARGET}"
     
       # Reload nginx if we have pid file
-      [[ -f "${CRL_NGINX_PID}" ]] && log "Sending ${CRL_SIGNAL} to pid $(cat ${CRL_NGINX_PID})" && kill "-${CRL_SIGNAL}" $(cat "${CRL_NGINX_PID}")
+      if [[ -f "${CRL_NGINX_PID}" ]]; then
+        log "Sending ${CRL_SIGNAL} to pid $(cat ${CRL_NGINX_PID})" && kill "-${CRL_SIGNAL}" $(cat "${CRL_NGINX_PID}")
+      elif [[ -n "${CRL_PGREP}" ]]; then
+        pid=$(pgrep -f "${CRL_PGREP}") && log "Sending ${CRL_SIGNAL} to pid ${pid}" && kill "-${CRL_SIGNAL}" "${pid}"
+      fi
     fi
 
     log_d "Sleeping for ${CRL_INTERVAL}"
