@@ -55,7 +55,7 @@ for src in ${CRL_SOURCES}; do
   sources=("${sources[@]}" "${src}") 
 done
 
-while getopts ':d:hi:kl:m:p:r:s:t:' opt; do
+while getopts ':d:hi:kl:m:p:q:r:s:t:' opt; do
     case "${opt}" in
     d)
         CRL_DATE_FORMAT="${OPTARG}"
@@ -77,7 +77,10 @@ while getopts ':d:hi:kl:m:p:r:s:t:' opt; do
         CRL_TMP="${OPTARG}"
         ;;
     p)
-        CRL_NGIN_PID="${OPTARG}"
+        CRL_NGINX_PID="${OPTARG}"
+        ;;
+    q)
+        CRL_PGREP="${OPTARG}"
         ;;
     r)
         CRL_SIGNAL="${OPTARG}"
